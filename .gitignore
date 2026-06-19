@@ -30,6 +30,8 @@ coverage/
 [Ss]creenshot*.jpg
 [Ss]creenshot*.jpeg
 [Ss]creenshot*.png
+!screenshot-01.jpg
+!screenshot-02.jpg
 
 # Never commit signing keys or certificate bundles
 *.pfx
