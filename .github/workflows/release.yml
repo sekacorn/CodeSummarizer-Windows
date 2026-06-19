@@ -1,0 +1,72 @@
+name: Build Windows Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test-and-release:
+    name: Test, build, and release
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.312"
+
+      - name: Run security regression tests
+        shell: pwsh
+        run: >-
+          dotnet run
+          --project tests\CodeSummarizer.Windows.Tests.csproj
+          --configuration Release
+
+      - name: Build general-purpose package
+        shell: pwsh
+        run: .\publish.ps1 -GeneralPurpose -SkipInstaller
+
+      - name: Build restricted assessment package
+        shell: pwsh
+        run: .\publish.ps1 -SkipInstaller
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeSummarizer-Windows-${{ github.ref_name }}
+          path: |
+            artifacts/CodeSummarizer-Windows-win-x64-general.zip
+            artifacts/CodeSummarizer-Windows-win-x64-general.zip.sha256
+            artifacts/CodeSummarizer-Windows-win-x64-restricted.zip
+            artifacts/CodeSummarizer-Windows-win-x64-restricted.zip.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            "artifacts/CodeSummarizer-Windows-win-x64-general.zip" `
+            "artifacts/CodeSummarizer-Windows-win-x64-general.zip.sha256" `
+            "artifacts/CodeSummarizer-Windows-win-x64-restricted.zip" `
+            "artifacts/CodeSummarizer-Windows-win-x64-restricted.zip.sha256" `
+            --repo "${{ github.repository }}" `
+            --verify-tag `
+            --title "Code Summarizer for Windows ${{ github.ref_name }}" `
+            --generate-notes
