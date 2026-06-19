@@ -179,13 +179,13 @@
                                         <TextBlock Text="Confidence" FontWeight="SemiBold" />
                                         <TextBlock Text="{Binding ConfidenceText}" HorizontalAlignment="Right" Foreground="{StaticResource PrimaryBrush}" FontWeight="Bold" />
                                     </Grid>
-                                    <ProgressBar Value="{Binding Confidence}" Maximum="1" Height="12" Foreground="{StaticResource PrimaryBrush}" />
+                                    <ProgressBar Value="{Binding Confidence, Mode=OneWay}" Maximum="1" Height="12" Foreground="{StaticResource PrimaryBrush}" />
                                 </StackPanel>
                             </Border>
 
                             <Expander Header="Raw model output" Visibility="{Binding ShowRawOutput, Converter={StaticResource BoolToVisibility}}"
                                       Margin="0,4,0,8">
-                                <TextBox Text="{Binding RawOutput}" IsReadOnly="True" TextWrapping="Wrap" Margin="0,8,0,0"
+                                <TextBox Text="{Binding RawOutput, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" Margin="0,8,0,0"
                                          FontFamily="Cascadia Mono, Consolas" FontSize="11" MaxHeight="260"
                                          VerticalScrollBarVisibility="Auto" />
                             </Expander>
