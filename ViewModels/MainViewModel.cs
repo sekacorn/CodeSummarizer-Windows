@@ -39,8 +39,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<string> Languages { get; } =
     [
-        "Ada", "C#", "C", "C++", "Java", "Python", "JavaScript", "TypeScript", "SQL", "VBA",
-        "JSON", "CSS", "DAX", "Assembly", "Fortran", "COBOL", "Bash", "PowerShell", "Rust", "Go"
+        "ABAP", "Ada", "Assembly", "Bash", "C", "C++", "C#", "COBOL", "CSS", "DAX",
+        "Delphi / Object Pascal", "Fortran", "Go", "Java", "JavaScript", "JSON", "MATLAB",
+        "Pascal", "PL/SQL", "PowerShell", "Python", "R", "Rust", "SAS", "SQL", "SystemVerilog",
+        "T-SQL", "Terraform / HCL", "TypeScript", "VBA", "VB.NET", "VHDL", "Verilog", "XML", "XSLT"
     ];
 
     public ObservableCollection<string> Models { get; } = [];

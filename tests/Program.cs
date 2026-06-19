@@ -46,6 +46,21 @@ Test("builds an Ada-aware analysis prompt", () =>
     Assert(prompt.Contains("Ada"), "Ada language context was omitted");
 });
 
+Test("builds prompts for government-focused languages", () =>
+{
+    var languages = new[]
+    {
+        "PL/SQL", "T-SQL", "SAS", "R", "MATLAB", "VHDL", "Verilog", "SystemVerilog",
+        "VB.NET", "Pascal", "Delphi / Object Pascal", "ABAP", "XML", "XSLT", "Terraform / HCL"
+    };
+
+    foreach (var language in languages)
+    {
+        var prompt = PromptBuilder.Build(language, "risk", "sample");
+        Assert(prompt.Contains(language), $"{language} context was omitted");
+    }
+});
+
 Test("parses fenced model JSON", () =>
 {
     const string output = "```json\n{\"summary\":[\"Works\"],\"walkthrough\":[],\"inputs\":[],\"outputs\":[],\"side_effects\":[],\"risks\":[],\"junior_explanation\":\"Simple\",\"confidence\":1.2}\n```";
