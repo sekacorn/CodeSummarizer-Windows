@@ -1,7 +1,44 @@
-bin/
-obj/
+# .NET build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
 artifacts/
+
+# Test and analysis output
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+*.trx
+
+# Visual Studio and other IDE state
 .vs/
+.vscode/
+.idea/
 *.user
 *.suo
-TestResults/
+*.userosscache
+*.sln.docstates
+
+# Local logs, diagnostics, and crash dumps
+*.log
+*.dmp
+*.dump
+
+# Local screenshots and review captures
+[Ss]creenshot*.jpg
+[Ss]creenshot*.jpeg
+[Ss]creenshot*.png
+
+# Never commit signing keys or certificate bundles
+*.pfx
+*.p12
+*.pvk
+*.key
+*.snk
+
+# Windows filesystem metadata
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
