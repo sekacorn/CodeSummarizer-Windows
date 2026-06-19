@@ -40,6 +40,12 @@ Test("all prompts resist instructions embedded in code", () =>
     }
 });
 
+Test("builds an Ada-aware analysis prompt", () =>
+{
+    var prompt = PromptBuilder.Build("Ada", "summarize", "procedure Hello is begin null; end Hello;");
+    Assert(prompt.Contains("Ada"), "Ada language context was omitted");
+});
+
 Test("parses fenced model JSON", () =>
 {
     const string output = "```json\n{\"summary\":[\"Works\"],\"walkthrough\":[],\"inputs\":[],\"outputs\":[],\"side_effects\":[],\"risks\":[],\"junior_explanation\":\"Simple\",\"confidence\":1.2}\n```";

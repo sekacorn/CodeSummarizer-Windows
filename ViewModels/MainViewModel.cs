@@ -39,7 +39,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<string> Languages { get; } =
     [
-        "C#", "C", "C++", "Java", "Python", "JavaScript", "TypeScript", "SQL", "VBA",
+        "Ada", "C#", "C", "C++", "Java", "Python", "JavaScript", "TypeScript", "SQL", "VBA",
         "JSON", "CSS", "DAX", "Assembly", "Fortran", "COBOL", "Bash", "PowerShell", "Rust", "Go"
     ];
 
