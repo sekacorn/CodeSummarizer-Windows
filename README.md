@@ -1,5 +1,11 @@
 # Code Summarizer for Windows
 
+[![Latest release](https://img.shields.io/github/v/release/sekacorn/CodeSummarizer-Windows?label=release)](https://github.com/sekacorn/CodeSummarizer-Windows/releases/latest)
+[![Build Windows Release](https://github.com/sekacorn/CodeSummarizer-Windows/actions/workflows/release.yml/badge.svg)](https://github.com/sekacorn/CodeSummarizer-Windows/actions/workflows/release.yml)
+[![License](https://img.shields.io/github/license/sekacorn/CodeSummarizer-Windows)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows)](#requirements)
+[![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+
 Code Summarizer is a native Windows desktop application for understanding, reviewing,
 and validating source-code snippets with a local Ollama model. The application is built
 with C# and WPF on .NET 8 and is designed for local-first workflows where source code
