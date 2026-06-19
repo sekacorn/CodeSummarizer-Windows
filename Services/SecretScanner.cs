@@ -6,16 +6,21 @@ namespace CodeSummarizer.Windows.Services;
 
 public sealed partial class SecretScanner
 {
-    public IReadOnlyList<SecretFinding> Scan(string code)
+    public static IReadOnlyList<SecretFinding> Scan(string code)
     {
         var findings = new List<SecretFinding>();
-        AddMatches(findings, code, AwsKeyRegex(), "AWS Access Key", m => $"{m.Value[..8]}...");
-        AddMatches(findings, code, JwtRegex(), "JWT Token", m => $"{m.Value[..Math.Min(20, m.Value.Length)]}...");
+        AddMatches(findings, code, AwsKeyRegex(), "AWS Access Key", _ => "AKIA***************");
+        AddMatches(findings, code, JwtRegex(), "JWT Token", _ => "eyJ…[masked]");
         AddCapturedMatches(findings, code, CredentialRegex(), "Credential assignment", 2,
             m => $"{m.Groups[1].Value}=***");
         AddMatches(findings, code, PemRegex(), "PEM Private Key", _ => "-----BEGIN PRIVATE KEY-----");
         AddCapturedMatches(findings, code, BearerRegex(), "Bearer Token", 1,
             _ => "Authorization: Bearer ***");
+        AddMatches(findings, code, GitHubTokenRegex(), "GitHub Token", _ => "gh*_***");
+        AddMatches(findings, code, GoogleApiKeyRegex(), "Google API Key", _ => "AIza***");
+        AddMatches(findings, code, OpenAiStyleKeyRegex(), "API Key", _ => "sk-***");
+        AddCapturedMatches(findings, code, AzureStorageKeyRegex(), "Azure Storage Account Key", 1,
+            _ => "AccountKey=***");
 
         return findings
             .OrderBy(f => f.Start)
@@ -23,7 +28,7 @@ public sealed partial class SecretScanner
             .ToArray();
     }
 
-    public string Redact(string code, IReadOnlyList<SecretFinding> findings)
+    public static string Redact(string code, IReadOnlyList<SecretFinding> findings)
     {
         if (findings.Count == 0)
             return code;
@@ -75,7 +80,7 @@ public sealed partial class SecretScanner
     [GeneratedRegex(@"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", RegexOptions.Compiled)]
     private static partial Regex JwtRegex();
 
-    [GeneratedRegex("(?i)(password|secret|api_key|apikey|access_token|private_key)\\s*[=:]\\s*[\"']([^\"']{8,})[\"']", RegexOptions.Compiled)]
+    [GeneratedRegex("(?i)(password|passwd|secret|client_secret|api_key|apikey|access_token|refresh_token|private_key|connection_string|sas_token)\\s*[=:]\\s*[\"']([^\"']{8,})[\"']", RegexOptions.Compiled)]
     private static partial Regex CredentialRegex();
 
     [GeneratedRegex(@"-----BEGIN (?:RSA |EC )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC )?PRIVATE KEY-----", RegexOptions.Compiled)]
@@ -83,4 +88,16 @@ public sealed partial class SecretScanner
 
     [GeneratedRegex(@"(?i)authorization:\s*bearer\s+([a-zA-Z0-9_\-.]{20,})", RegexOptions.Compiled)]
     private static partial Regex BearerRegex();
+
+    [GeneratedRegex(@"gh[pousr]_[A-Za-z0-9]{36,255}", RegexOptions.Compiled)]
+    private static partial Regex GitHubTokenRegex();
+
+    [GeneratedRegex(@"AIza[0-9A-Za-z\-_]{35}", RegexOptions.Compiled)]
+    private static partial Regex GoogleApiKeyRegex();
+
+    [GeneratedRegex(@"sk-[A-Za-z0-9_-]{20,}", RegexOptions.Compiled)]
+    private static partial Regex OpenAiStyleKeyRegex();
+
+    [GeneratedRegex(@"(?i)AccountKey=([A-Za-z0-9+/]{40,}={0,2})", RegexOptions.Compiled)]
+    private static partial Regex AzureStorageKeyRegex();
 }

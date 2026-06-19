@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.IO;
 using System.Text.Json;
 using CodeSummarizer.Windows.Models;
 
@@ -8,16 +9,14 @@ namespace CodeSummarizer.Windows.Services;
 
 public sealed class OllamaService : IDisposable
 {
-    private static readonly Uri BaseAddress = new("http://127.0.0.1:11434/");
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly HttpClient _httpClient;
-    private readonly SecretScanner _secretScanner;
-
-    public OllamaService(SecretScanner secretScanner)
+    public OllamaService()
     {
-        _secretScanner = secretScanner;
+        SecurityPolicy.ValidateOllamaEndpoint();
         _httpClient = new HttpClient
         {
-            BaseAddress = BaseAddress,
+            BaseAddress = SecurityPolicy.OllamaEndpoint,
             Timeout = TimeSpan.FromMinutes(3)
         };
     }
@@ -26,9 +25,9 @@ public sealed class OllamaService : IDisposable
     {
         try
         {
-            using var response = await _httpClient.GetAsync("api/tags", cancellationToken);
+            using var response = await _httpClient.GetAsync("api/tags", HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             await EnsureSuccessAsync(response, null, cancellationToken);
-            var payload = await response.Content.ReadFromJsonAsync<ModelsPayload>(cancellationToken: cancellationToken);
+            var payload = await ReadJsonAsync<ModelsPayload>(response.Content, SecurityPolicy.MaximumModelListBytes, cancellationToken);
             var models = payload?.Models.Select(m => m.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToArray() ?? [];
             if (models.Length == 0)
                 throw new InvalidOperationException("No Ollama models are installed. Run: ollama pull qwen2.5-coder:7b");
@@ -47,21 +46,22 @@ public sealed class OllamaService : IDisposable
     public async Task<AnalysisResponse> AnalyzeAsync(string language, string code, string model,
         string mode, bool redact, CancellationToken cancellationToken = default)
     {
-        var findings = _secretScanner.Scan(code);
-        var codeToSend = redact ? _secretScanner.Redact(code, findings) : code;
+        if (code.Length > SecurityPolicy.MaximumInputCharacters)
+            throw new InvalidOperationException($"Code is limited to {SecurityPolicy.MaximumInputCharacters:N0} characters per analysis.");
+
+        var findings = SecretScanner.Scan(code);
+        var codeToSend = redact ? SecretScanner.Redact(code, findings) : code;
         var prompt = PromptBuilder.Build(language, mode, codeToSend);
 
         try
         {
-            using var response = await _httpClient.PostAsJsonAsync("api/generate", new
+            using var request = new HttpRequestMessage(HttpMethod.Post, "api/generate")
             {
-                model,
-                prompt,
-                stream = false,
-                format = "json"
-            }, cancellationToken);
+                Content = JsonContent.Create(new { model, prompt, stream = false, format = "json" })
+            };
+            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             await EnsureSuccessAsync(response, model, cancellationToken);
-            var payload = await response.Content.ReadFromJsonAsync<GeneratePayload>(cancellationToken: cancellationToken)
+            var payload = await ReadJsonAsync<GeneratePayload>(response.Content, SecurityPolicy.MaximumModelResponseBytes, cancellationToken)
                 ?? throw new InvalidOperationException("Ollama returned an empty response.");
             return new(payload.Response, redact && findings.Count > 0, findings);
         }
@@ -81,13 +81,42 @@ public sealed class OllamaService : IDisposable
         if (response.IsSuccessStatusCode)
             return;
 
-        var detail = await response.Content.ReadAsStringAsync(cancellationToken);
+        var detail = await ReadBoundedTextAsync(response.Content, SecurityPolicy.MaximumErrorDetailCharacters, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotFound && model is not null)
             throw new InvalidOperationException($"Model '{model}' was not found. Run: ollama pull {model}");
         throw new InvalidOperationException($"Ollama returned {(int)response.StatusCode}: {detail}");
     }
 
     public void Dispose() => _httpClient.Dispose();
+
+    private static async Task<T?> ReadJsonAsync<T>(HttpContent content, int maximumBytes,
+        CancellationToken cancellationToken)
+    {
+        if (content.Headers.ContentLength is long length && length > maximumBytes)
+            throw new InvalidOperationException($"Ollama response exceeded the {maximumBytes:N0}-byte safety limit.");
+
+        await using var input = await content.ReadAsStreamAsync(cancellationToken);
+        using var output = new MemoryStream();
+        var buffer = new byte[81_920];
+        var total = 0;
+        int bytesRead;
+        while ((bytesRead = await input.ReadAsync(buffer, cancellationToken)) > 0)
+        {
+            total += bytesRead;
+            if (total > maximumBytes)
+                throw new InvalidOperationException($"Ollama response exceeded the {maximumBytes:N0}-byte safety limit.");
+            output.Write(buffer, 0, bytesRead);
+        }
+
+        return JsonSerializer.Deserialize<T>(output.ToArray(), JsonOptions);
+    }
+
+    private static async Task<string> ReadBoundedTextAsync(HttpContent content, int maximumCharacters,
+        CancellationToken cancellationToken)
+    {
+        var text = await content.ReadAsStringAsync(cancellationToken);
+        return text.Length <= maximumCharacters ? text : text[..maximumCharacters] + " [truncated]";
+    }
 
     private sealed class ModelsPayload
     {

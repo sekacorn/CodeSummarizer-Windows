@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>CodeSummarizer</AssemblyName>
     <RootNamespace>CodeSummarizer.Windows</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Authors>sekacorn</Authors>
     <Description>Local-first, privacy-first code analysis for Windows.</Description>
     <Copyright>Copyright (c) 2026</Copyright>
@@ -17,6 +17,12 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <DebugType>embedded</DebugType>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <GovernmentMode Condition="'$(GovernmentMode)' == ''">false</GovernmentMode>
+    <DefineConstants Condition="'$(GovernmentMode)' == 'true'">$(DefineConstants);GOVERNMENT_MODE</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

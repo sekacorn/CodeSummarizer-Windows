@@ -44,7 +44,7 @@
                                Margin="0,4,0,0" FontSize="13" Foreground="#EEF0FF" />
                 </StackPanel>
                 <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <TextBlock Text="WINDOWS NATIVE" Foreground="White" FontWeight="Bold" FontSize="11"
+                    <TextBlock Text="{Binding BuildLabel}" Foreground="White" FontWeight="Bold" FontSize="11"
                                HorizontalAlignment="Right" />
                     <TextBlock Text="Ollama on 127.0.0.1 only" Foreground="#EEF0FF" FontSize="11" Margin="0,3,0,0" />
                 </StackPanel>
@@ -90,7 +90,8 @@
                 <StackPanel Grid.Row="1" Margin="0,0,0,10">
                     <CheckBox IsChecked="{Binding RedactSecrets}" IsEnabled="{Binding CanToggleRedaction}"
                               Content="Mask potential secrets before sending code to the local model" Margin="0,0,0,7" />
-                    <CheckBox IsChecked="{Binding SensitiveMode}" Content="Sensitive Mode (enforce redaction and hide raw output)" />
+                    <CheckBox IsChecked="{Binding SensitiveMode}" IsEnabled="{Binding CanToggleSensitiveMode}"
+                              Content="Sensitive Mode (redaction, capture protection, no clipboard or raw output)" />
                     <Border Background="#E8EAFB" CornerRadius="5" Padding="9" Margin="0,8,0,0"
                             Visibility="{Binding SensitiveMode, Converter={StaticResource BoolToVisibility}}">
                         <TextBlock Text="{Binding SensitiveModeMessage}" Foreground="#3949AB" TextWrapping="Wrap" FontSize="12" />
@@ -128,7 +129,7 @@
                     <Grid Grid.Row="0" Margin="18,14,18,10">
                         <TextBlock Text="Analysis" FontSize="18" FontWeight="SemiBold" />
                         <Button Content="Copy report" HorizontalAlignment="Right" Padding="10,6"
-                                Command="{Binding CopyAllCommand}" />
+                                Command="{Binding CopyAllCommand}" ToolTip="Disabled while Sensitive Mode is active" />
                     </Grid>
 
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="18,0,18,18">

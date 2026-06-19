@@ -10,6 +10,10 @@ A native Windows desktop application that explains, summarizes, validates, and r
 - Detects and optionally masks common credentials before analysis.
 - Sensitive Mode enforces masking and hides raw model output.
 
+The default release produced by `publish.ps1` is the restricted assessment build. It
+also disables app clipboard export, requires Windows screen-capture exclusion, bounds
+input and response sizes, and compiles Sensitive Mode so it cannot be disabled.
+
 ## Features
 
 - Summarize code
@@ -52,7 +56,8 @@ Run:
 .\publish.ps1
 ```
 
-This creates a self-contained 64-bit Windows application and portable ZIP under `artifacts`.
+This creates a self-contained 64-bit restricted Windows application, SHA-256 file, and
+portable ZIP under `artifacts`.
 If Inno Setup 6 is installed on the development computer, the script also creates
 `CodeSummarizer-Windows-Setup.exe`. End users do not need Inno Setup.
 
@@ -68,6 +73,16 @@ WPF interface
 ```
 
 The project intentionally uses only the .NET platform libraries. There are no runtime NuGet dependencies.
+
+## Security assessment
+
+Run `.\audit.ps1` to produce test results, binary/source hash manifests, build metadata,
+an SPDX component inventory, and copies of the security documentation. Start with
+[AUDIT_READINESS.md](AUDIT_READINESS.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
+
+The restricted build is an assessment candidate. It is not an authorization to process
+classified information. Ollama, model weights, the Windows endpoint, signing, scans,
+and the organization's RMF/ATO decision remain separate requirements.
 
 ## License
 

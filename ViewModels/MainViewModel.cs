@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Text;
 using System.Windows;
 using CodeSummarizer.Windows.Models;
@@ -9,11 +10,13 @@ namespace CodeSummarizer.Windows.ViewModels;
 public sealed class MainViewModel : ObservableObject, IDisposable
 {
     private readonly OllamaService _ollamaService;
+    private readonly string _buildLabel = SecurityPolicy.BuildLabel;
     private string _code = string.Empty;
     private string _selectedLanguage = "C#";
     private string? _selectedModel;
     private bool _redactSecrets = true;
-    private bool _sensitiveMode;
+    private bool _sensitiveMode = SecurityPolicy.IsRestrictedBuild;
+    private bool _securityControlReady = !SecurityPolicy.IsRestrictedBuild;
     private bool _isBusy;
     private string _statusText = "Start Ollama, then choose a model and paste code.";
     private string? _errorText;
@@ -25,16 +28,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _validationText = string.Empty;
     private string _validationColor = "#155724";
     private CancellationTokenSource? _analysisCancellation;
+    private string? _lastCopiedText;
 
     public MainViewModel()
     {
-        _ollamaService = new OllamaService(new SecretScanner());
+        _ollamaService = new OllamaService();
         RefreshModelsCommand = new AsyncRelayCommand(_ => RefreshModelsAsync(), _ => !IsBusy);
         AnalyzeCommand = new AsyncRelayCommand(AnalyzeAsync, p => CanAnalyze && p is string);
         ClearCommand = new RelayCommand(_ => Clear(), _ => !IsBusy);
         CancelCommand = new RelayCommand(_ => _analysisCancellation?.Cancel(), _ => IsBusy);
-        CopySectionCommand = new RelayCommand(p => CopyText(p as string));
-        CopyAllCommand = new RelayCommand(_ => CopyAll(), _ => HasResult);
+        CopySectionCommand = new RelayCommand(p => CopyText(p as string), _ => !SensitiveMode);
+        CopyAllCommand = new RelayCommand(_ => CopyAll(), _ => HasResult && !SensitiveMode);
     }
 
     public IReadOnlyList<string> Languages { get; } =
@@ -77,11 +81,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         get => _sensitiveMode;
         set
         {
+#if GOVERNMENT_MODE
+            value = true;
+#endif
             if (!SetProperty(ref _sensitiveMode, value)) return;
             if (value) RedactSecrets = true;
+            if (value) ClearOwnedClipboard();
             OnPropertyChanged(nameof(CanToggleRedaction));
+            OnPropertyChanged(nameof(CanToggleSensitiveMode));
+            OnPropertyChanged(nameof(CopyAllowed));
             OnPropertyChanged(nameof(ShowRawOutput));
             OnPropertyChanged(nameof(SensitiveModeMessage));
+            CopySectionCommand.NotifyCanExecuteChanged();
+            CopyAllCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -97,15 +109,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public string BusyText => IsBusy ? "Analyzing locally…" : "Ready";
-    public bool CanAnalyze => !IsBusy && !string.IsNullOrWhiteSpace(Code) && !string.IsNullOrWhiteSpace(SelectedModel);
+    public bool CanAnalyze => !IsBusy && _securityControlReady && !string.IsNullOrWhiteSpace(Code) && !string.IsNullOrWhiteSpace(SelectedModel);
     public bool CanToggleRedaction => !SensitiveMode;
+    public bool CanToggleSensitiveMode => !SecurityPolicy.IsRestrictedBuild && !IsBusy;
+    public bool CopyAllowed => !SensitiveMode;
+    public string BuildLabel => _buildLabel;
 
     public string StatusText { get => _statusText; private set => SetProperty(ref _statusText, value); }
     public string? ErrorText { get => _errorText; private set { SetProperty(ref _errorText, value); OnPropertyChanged(nameof(HasError)); } }
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorText);
     public string? WarningText { get => _warningText; private set { SetProperty(ref _warningText, value); OnPropertyChanged(nameof(HasWarning)); } }
     public bool HasWarning => !string.IsNullOrWhiteSpace(WarningText);
-    public string SensitiveModeMessage => SensitiveMode ? "Sensitive Mode: redaction is enforced and raw model output is hidden." : string.Empty;
+    public string SensitiveModeMessage => SensitiveMode
+        ? SecurityPolicy.IsRestrictedBuild
+            ? "Restricted build: redaction and screen-capture protection are enforced; clipboard export and raw output are disabled."
+            : "Sensitive Mode: redaction and screen-capture protection are enabled; clipboard export and raw output are disabled."
+        : string.Empty;
     public string? RawOutput { get => _rawOutput; private set { SetProperty(ref _rawOutput, value); OnPropertyChanged(nameof(ShowRawOutput)); } }
     public bool ShowRawOutput => !SensitiveMode && !string.IsNullOrWhiteSpace(RawOutput);
     public double Confidence { get => _confidence; private set { SetProperty(ref _confidence, value); OnPropertyChanged(nameof(ConfidenceText)); } }
@@ -154,6 +173,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async Task AnalyzeAsync(object? parameter)
     {
         if (parameter is not string mode || !CanAnalyze) return;
+        if (Code.Length > SecurityPolicy.MaximumInputCharacters)
+        {
+            ErrorText = $"Code is limited to {SecurityPolicy.MaximumInputCharacters:N0} characters per analysis.";
+            StatusText = "Input rejected by the size safety limit";
+            return;
+        }
         ErrorText = null;
         WarningText = null;
         HasResult = false;
@@ -168,7 +193,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             var response = await _ollamaService.AnalyzeAsync(SelectedLanguage, Code, SelectedModel!, mode,
                 RedactSecrets, _analysisCancellation.Token);
-            RawOutput = response.ModelOutput;
             if (response.Findings.Count > 0)
             {
                 var action = response.Redacted ? "masked before analysis" : "detected but not masked";
@@ -177,6 +201,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
 
             var analysis = AnalysisParser.Parse(response.ModelOutput);
+            RawOutput = SensitiveMode ? null : response.ModelOutput;
             PopulateResult(analysis);
             StatusText = $"Analysis complete · {ModeName(mode)} · {SelectedModel}";
         }
@@ -222,7 +247,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         HasResult = true;
     }
 
-    private void AddListSection(string title, IReadOnlyCollection<string> values)
+    private void AddListSection(string title, List<string> values)
     {
         if (values.Count > 0) Sections.Add(new(title, string.Join(Environment.NewLine, values.Select(v => $"• {v}"))));
     }
@@ -254,18 +279,46 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         StatusText = "Cleared. Paste code to begin another analysis.";
     }
 
-    private static void CopyText(string? text)
+    public void ReportCaptureProtection(bool enabled)
     {
-        if (!string.IsNullOrWhiteSpace(text)) Clipboard.SetText(text);
+        _securityControlReady = enabled || !SecurityPolicy.IsRestrictedBuild;
+        if (!_securityControlReady)
+        {
+            ErrorText = "Restricted build startup was blocked because Windows screen-capture protection could not be enabled.";
+            StatusText = "Required security control unavailable";
+        }
+        NotifyCommandState();
+    }
+
+    private void CopyText(string? text)
+    {
+        if (SensitiveMode || string.IsNullOrWhiteSpace(text)) return;
+        Clipboard.SetText(text);
+        _lastCopiedText = text;
     }
 
     private void CopyAll()
     {
         var report = new StringBuilder();
         foreach (var section in Sections) report.AppendLine(section.Title).AppendLine(section.Content).AppendLine();
-        report.AppendLine($"Confidence: {ConfidenceText}");
+        report.AppendLine(CultureInfo.InvariantCulture, $"Confidence: {ConfidenceText}");
         CopyText(report.ToString());
         StatusText = "Analysis copied to clipboard";
+    }
+
+    private void ClearOwnedClipboard()
+    {
+        if (string.IsNullOrEmpty(_lastCopiedText)) return;
+        try
+        {
+            if (Clipboard.ContainsText() && Clipboard.GetText() == _lastCopiedText)
+                Clipboard.Clear();
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // Another process may temporarily own the clipboard. Sensitive Mode still blocks future app copies.
+        }
+        _lastCopiedText = null;
     }
 
     private void NotifyCommandState()

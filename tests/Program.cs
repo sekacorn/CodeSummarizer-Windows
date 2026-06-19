@@ -1,14 +1,12 @@
 using CodeSummarizer.Windows.Services;
 
-var scanner = new SecretScanner();
-
 Test("detects and redacts AWS keys", () =>
 {
     const string secret = "AKIAIOSFODNN7EXAMPLE";
     var source = $"const key = '{secret}';";
-    var findings = scanner.Scan(source);
+    var findings = SecretScanner.Scan(source);
     Assert(findings.Any(f => f.Kind == "AWS Access Key"), "AWS key was not detected");
-    var redacted = scanner.Redact(source, findings);
+    var redacted = SecretScanner.Redact(source, findings);
     Assert(!redacted.Contains(secret), "AWS key remained in redacted text");
     Assert(redacted.Contains("***REDACTED***"), "redaction marker was not inserted");
 });
@@ -16,17 +14,33 @@ Test("detects and redacts AWS keys", () =>
 Test("redacts credential values but preserves code", () =>
 {
     const string source = "var before = 1; password = \"supersecret123\"; var after = 2;";
-    var redacted = scanner.Redact(source, scanner.Scan(source));
+    var redacted = SecretScanner.Redact(source, SecretScanner.Scan(source));
     Assert(redacted.Contains("var before = 1"), "code before secret was changed");
     Assert(redacted.Contains("var after = 2"), "code after secret was changed");
     Assert(!redacted.Contains("supersecret123"), "password remained in text");
+});
+
+Test("secret previews do not disclose detected values", () =>
+{
+    const string secret = "AKIAIOSFODNN7EXAMPLE";
+    var finding = SecretScanner.Scan(secret).Single();
+    Assert(!finding.Preview.Contains(secret), "secret preview disclosed the full value");
+    Assert(!finding.Preview.Contains("IOSFODNN7EXAMPLE"), "secret preview disclosed a sensitive suffix");
+});
+
+Test("detects additional enterprise credential formats", () =>
+{
+    const string source = "client_secret=\"really-secret-client-value\"\nkey=\"sk-abcdefghijklmnopqrstuvwx\"";
+    var findings = SecretScanner.Scan(source);
+    Assert(findings.Any(f => f.Kind == "Credential assignment"), "client secret was not detected");
+    Assert(findings.Any(f => f.Kind == "API Key"), "API key was not detected");
 });
 
 Test("merges overlapping token findings safely", () =>
 {
     const string token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
     var source = $"Authorization: Bearer {token}";
-    var redacted = scanner.Redact(source, scanner.Scan(source));
+    var redacted = SecretScanner.Redact(source, SecretScanner.Scan(source));
     Assert(!redacted.Contains(token), "overlapping JWT/Bearer token remained in text");
 });
 
@@ -67,6 +81,12 @@ Test("parses fenced model JSON", () =>
     var result = AnalysisParser.Parse(output);
     Assert(result.Summary.Single() == "Works", "summary was not parsed");
     Assert(result.Confidence == 1, "confidence was not clamped");
+});
+
+Test("security policy pins Ollama to IPv4 loopback", () =>
+{
+    SecurityPolicy.ValidateOllamaEndpoint();
+    Assert(SecurityPolicy.OllamaEndpoint.AbsoluteUri == "http://127.0.0.1:11434/", "Ollama endpoint changed");
 });
 
 Console.WriteLine("All Code Summarizer Windows tests passed.");
